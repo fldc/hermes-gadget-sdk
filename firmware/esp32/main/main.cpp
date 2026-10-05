@@ -175,16 +175,18 @@ extern "C" void app_main(void) {
   i2c_master_bus_handle_t i2c_bus = hgp::i2c::bus(board.i2c);
   i2c_master_bus_handle_t touch_bus = i2c_bus;
   if (board.touch_i2c.sda >= 0 && board.touch_i2c.scl >= 0) {
-    if (i2c_master_bus_handle_t b = hgp::i2c::bus(board.touch_i2c)) touch_bus = b;
+    touch_bus = hgp::i2c::bus(board.touch_i2c);
+    if (!touch_bus) ESP_LOGE(TAG, "dedicated touch I2C bus unavailable");
   }
   const bool cores3_ready = !board.cores3 || g_cores3.begin(i2c_bus);
   // The AXP2101 display/touch/backlight rails must be up before those
   // peripherals are initialised, so bring power up first.
-  bool power_ready = true;
+  bool power_ready = !board.axp_display_supply;
   if (board.axp2101 && g_power.begin(i2c_bus)) {
     hal.power = &g_power;
     if (board.axp_display_supply) power_ready = g_power.enable_display_supplies();
   }
+  if (!power_ready) ESP_LOGE(TAG, "display/touch power supplies unavailable");
   const bool peripherals_ready = cores3_ready && power_ready;
   if (board.cores3 && peripherals_ready)
     g_display.board_backlight = [](uint8_t percent) { g_cores3.set_backlight(percent); };

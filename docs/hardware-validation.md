@@ -22,6 +22,21 @@ The LCD-1.54 `-EN` SKU uses the same hardware. The separate Touch-LCD-1.54 model
 
 CI builds and packages these profiles. The browser installer lists profiles included in the latest published release, so newly merged profiles may require a source build until the next release. Other chips, wiring, and unlisted hardware revisions are porting targets, not verified configurations.
 
+### LilyGO T-Watch-S3 bring-up
+
+The T-Watch-S3 port is experimental. The exact PCB revision has not been recorded.
+It targets 16 MB flash and 8 MB octal PSRAM, with a 240×240 ST7789 display,
+FT6336U touch on a dedicated I2C bus, an SPM1423 PDM microphone, MAX98357A
+speaker and AXP2101 battery reporting/power-off support.
+
+Physical smoke checks on the development watch confirmed USB flashing, PSRAM
+initialization, an upright centred display, peripheral initialization and online
+pairing. Temporary microphone diagnostics returned nonzero PCM, but do not
+establish recording quality. Speaker crackle was reported; audio quality and
+interruption require retesting after the I2S timeout and transfer fixes.
+Battery operation, charging measurements, shutdown, OTA rollback and the
+two-hour session have not been verified. No complete physical report is recorded.
+
 ## Record a physical test
 
 Run this checklist for each board revision and release candidate. Report failed and untested steps explicitly. Do not publish Wi-Fi passwords, access tokens, device keys, or private conversation content.

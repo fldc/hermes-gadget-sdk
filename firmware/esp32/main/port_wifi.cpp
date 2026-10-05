@@ -36,8 +36,12 @@ void Wifi::begin(NvsStorage& storage) {
 
 void Wifi::set_low_latency(bool on) {
   if (on == low_latency_) return;
+  const esp_err_t err = esp_wifi_set_ps(on ? WIFI_PS_NONE : WIFI_PS_MIN_MODEM);
+  if (err != ESP_OK) {
+    ESP_LOGW("hg.wifi", "could not change modem sleep: %s", esp_err_to_name(err));
+    return;
+  }
   low_latency_ = on;
-  esp_wifi_set_ps(on ? WIFI_PS_NONE : WIFI_PS_MIN_MODEM);
   ESP_LOGI("hg.wifi", "modem sleep %s", on ? "off (streaming audio)" : "on");
 }
 

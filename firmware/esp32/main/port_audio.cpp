@@ -79,7 +79,7 @@ void I2sMic::task(void* arg) {
     size_t got = 0;
     // ESP_ERR_TIMEOUT only means fewer bytes than requested were ready; `got`
     // still holds what was read, so drop only genuinely empty reads.
-    i2s_channel_read(self->rx_, raw, sizeof(raw), &got, pdMS_TO_TICKS(100));
+    i2s_channel_read(self->rx_, raw, sizeof(raw), &got, 100);
     if (got == 0) continue;
     size_t n = got / sizeof(int32_t);
     for (size_t i = 0; i < n; ++i) {
@@ -137,10 +137,9 @@ void PdmMic::task(void* arg) {
       continue;
     }
     size_t got = 0;
-    // ESP_ERR_TIMEOUT is normal here: it means fewer bytes than requested were
-    // ready, and `got` still holds the samples that were read. Only a `got` of
-    // zero means nothing arrived.
-    i2s_channel_read(self->rx_, pcm, sizeof(pcm), &got, pdMS_TO_TICKS(100));
+    // A timeout can still return valid partial PCM. I2S takes milliseconds,
+    // unlike FreeRTOS delays and stream-buffer operations, which take ticks.
+    i2s_channel_read(self->rx_, pcm, sizeof(pcm), &got, 100);
     if (got == 0) continue;
     if (self->capturing_) events::post(EventType::Mic, pcm, got);
   }
@@ -150,7 +149,12 @@ void PdmMic::task(void* arg) {
 // Speaker
 
 bool I2sSpeaker::begin(const I2sSpeakerConfig& cfg) {
-  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(cfg.port, I2S_ROLE_MASTER);
+  if (cfg.port != 0 && cfg.port != 1) {
+    ESP_LOGE(TAG, "invalid speaker I2S port %d", cfg.port);
+    return false;
+  }
+  // IDF 5 uses an enum here; IDF 6 uses int. These constants work with both.
+  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(cfg.port == 0 ? I2S_NUM_0 : I2S_NUM_1, I2S_ROLE_MASTER);
   chan.auto_clear = true;  // silence on underrun instead of repeating the last buffer
   if (i2s_new_channel(&chan, &tx_, nullptr) != ESP_OK) return false;
   i2s_std_config_t std_cfg = std_config(rate_, I2S_DATA_BIT_WIDTH_16BIT, cfg.bclk, cfg.ws, cfg.dout, -1);
@@ -233,17 +237,28 @@ void I2sSpeaker::task(void* arg) {
     size_t n = got / sizeof(int16_t);
     int vol = self->volume_.load();
     for (size_t i = 0; i < n; ++i) chunk[i] = static_cast<int16_t>(chunk[i] * vol / 100);
-    // A write commonly completes one DMA buffer per call (ESP_ERR_TIMEOUT with a
-    // partial count), so keep feeding the remainder; dropping it sounds like
-    // crackle.
+    // Preserve partial writes, retry temporary stalls, and allow cancellation
+    // between calls. Bound consecutive stalls so a broken channel cannot hang.
     const size_t total = n * sizeof(int16_t);
     size_t offset = 0;
-    while (offset < total) {
+    unsigned stalls = 0;
+    while (offset < total && !self->flush_.load()) {
       size_t written = 0;
-      i2s_channel_write(self->tx_, reinterpret_cast<uint8_t*>(chunk) + offset, total - offset, &written,
-                        pdMS_TO_TICKS(200));
-      if (written == 0) break;
+      const esp_err_t err = i2s_channel_write(self->tx_, reinterpret_cast<uint8_t*>(chunk) + offset,
+                                             total - offset, &written, 50);
       offset += written;
+      if (self->flush_.load()) break;
+      if (err != ESP_OK && err != ESP_ERR_TIMEOUT) {
+        ESP_LOGE(TAG, "speaker write failed (%s), abandoning %u bytes", esp_err_to_name(err),
+                 static_cast<unsigned>(total - offset));
+        break;
+      }
+      if (written) {
+        stalls = 0;
+      } else if (++stalls >= 4) {
+        ESP_LOGW(TAG, "speaker stalled, abandoning %u bytes", static_cast<unsigned>(total - offset));
+        break;
+      }
     }
   }
 }
