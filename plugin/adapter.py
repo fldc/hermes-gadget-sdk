@@ -146,6 +146,7 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
         self._heartbeat_s = int(extra.get("heartbeat_s") or 20)
         self._max_utterance_s = float(extra.get("max_utterance_s") or 60)
         self._speak_replies = _flag(extra.get("speak_replies"), True)
+        self._approximation_word = str(extra.get("approximation_word") or "about").strip() or "about"
         self._auto_home = _flag(extra.get("auto_home"), True)
         self._tls_cert = extra.get("tls_cert")
         self._tls_key = extra.get("tls_key")
@@ -434,6 +435,9 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
 
     # -- outbound text ----------------------------------------------------------------
 
+    def prepare_tts_text(self, text: str) -> str:
+        return super().prepare_tts_text(textfmt.normalize_tildes(text, self._approximation_word))
+
     async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None,
                    metadata: Optional[Dict[str, Any]] = None) -> SendResult:
         session = self._session(chat_id)
@@ -447,7 +451,7 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
             # Show what speech-to-text heard as the user's line, not as a reply.
             await session.send_transcript(textfmt.for_device(heard, session.charset))
             return SendResult(success=True, message_id=uuid.uuid4().hex[:12])
-        text = textfmt.for_device(content, session.charset)
+        text = textfmt.for_device(content, session.charset, approximation_word=self._approximation_word)
         if text:
             interim = bool((metadata or {}).get("_interim_send"))
             await session.send_reply(text, turn=self._turns.get(session.device_id), interim=interim)
@@ -461,14 +465,15 @@ class GadgetAdapter(BasePlatformAdapter, HubDelegate):
         session = self._session(chat_id)
         if session is None or not session.paired:
             return SendResult(success=False, error="gadget not connected")
-        await session.send_delta(textfmt.for_device(content, session.charset), turn=self._turns.get(session.device_id))
+        await session.send_delta(textfmt.for_device(content, session.charset, approximation_word=self._approximation_word),
+                                 turn=self._turns.get(session.device_id))
         return SendResult(success=True)
 
     async def edit_message(self, chat_id: str, message_id: str, content: str, *, finalize: bool = False) -> SendResult:
         session = self._session(chat_id)
         if session is None or not session.paired:
             return SendResult(success=False, error="gadget not connected")
-        text = textfmt.for_device(content, session.charset)
+        text = textfmt.for_device(content, session.charset, approximation_word=self._approximation_word)
         if str(message_id).startswith(PROMPT_PREFIX):
             # Hermes edits a question card when it times out: withdraw it and say why.
             await self._withdraw_prompt(session, str(message_id)[len(PROMPT_PREFIX):])

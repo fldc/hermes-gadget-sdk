@@ -36,6 +36,20 @@ _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$", re
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 _BLANKS = re.compile(r"\n{3,}")
 _SPACES = re.compile(r"[ \t]{2,}")
+_STRIKE = re.compile(r"~~(.+?)~~", re.DOTALL)
+_APPROX = re.compile(r"(?<![\w/~])(?:~+|≈)\s*(?=[+-]?\d)")
+_DECORATIVE_TILDE = re.compile(r"(?<![/~])~+(?![/~\d]|[A-Za-z0-9_.-]+/)")
+
+
+def normalize_tildes(text: str, approximation_word: str = "about") -> str:
+    """Drop ornamental/Markdown tildes; keep numeric approximation meaningful.
+
+    Preserve home-directory paths such as ~/src and ~user/src. Normalize before
+    Hermes's TTS cleaner, which otherwise expands even ornamental '~' to 'about'.
+    """
+    text = _STRIKE.sub(r"\1", text or "")
+    text = _APPROX.sub(lambda _: approximation_word + " ", text)
+    return _DECORATIVE_TILDE.sub("", text)
 
 
 def strip_markdown(text: str) -> str:
@@ -73,8 +87,9 @@ def fold_ascii(text: str) -> str:
     return "".join(out)
 
 
-def for_device(text: str, charset: str = "ascii") -> str:
+def for_device(text: str, charset: str = "ascii", *, approximation_word: str = "about") -> str:
     text = strip_markdown(text or "")
+    text = normalize_tildes(text, approximation_word)
     if charset == "ascii":
         text = fold_ascii(text)
     text = "\n".join(_SPACES.sub(" ", line).rstrip() for line in text.splitlines())

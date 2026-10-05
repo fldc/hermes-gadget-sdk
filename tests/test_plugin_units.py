@@ -34,7 +34,25 @@ def test_code_fences_keep_their_content():
     assert textfmt.for_device("```python\nprint(1)\n```") == "print(1)"
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("Hej~! Klart~", "Hej! Klart"),
+    ("~ Hej ~", "Hej"),
+    ("Det tar ~5 minuter~.", "Det tar cirka 5 minuter."),
+    ("Det tar ~ 5 minuter eller ≈10 minuter.", "Det tar cirka 5 minuter eller cirka 10 minuter."),
+    ("~~gammalt~~ blir nytt", "gammalt blir nytt"),
+    ("Spara i ~/src eller ~fredrik/src.", "Spara i ~/src eller ~fredrik/src."),
+])
+def test_tildes_are_not_spoken_as_ornamental_about(text, expected):
+    assert textfmt.for_device(text, charset="utf8", approximation_word="cirka") == expected
+    assert textfmt.normalize_tildes(text, "cirka").strip() == expected
+
+
+def test_tilde_approximation_defaults_to_english():
+    assert textfmt.for_device("~5 minutes") == "about 5 minutes"
+
+
 # -- audio -------------------------------------------------------------------------------
+
 
 def _sine(rate: int, seconds: float, freq: float = 440.0) -> bytes:
     return b"".join(struct.pack("<h", int(10000 * math.sin(2 * math.pi * freq * i / rate)))

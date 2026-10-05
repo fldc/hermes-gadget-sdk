@@ -87,6 +87,13 @@ Secrets go in `~/.hermes/.env`, following Hermes's rule that `.env` is only for 
 
 Because a gadget is voice-first, `GadgetAdapter` answers `True` from `_should_auto_tts_for_chat` for devices that declare a speaker. The gateway then reads every reply aloud for that chat, both typed and spoken input. `/voice off` in the device's chat, or `speak_replies: false`, turns it off.
 
+Decorative tilde characters and Markdown strikethrough markers are removed from
+gadget replies. Numeric approximations such as `~5` are expanded for the screen
+and auto-TTS. Set `platforms.gadget.extra.approximation_word: cirka` for Swedish
+(the default is `about`). This keeps a decorative `Hej~!` from being spoken as
+"Hej about!", while preserving the meaning of approximate numbers. Home-directory
+paths such as `~/src` are preserved by this cleanup.
+
 ### Pairing
 
 The SDK reuses Hermes's DM pairing instead of inventing its own:
