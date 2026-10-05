@@ -23,6 +23,8 @@ class TouchGestures {
     int slop_px = 18;        // movement allowed before a touch stops being a hold or tap
     int swipe_px = 60;       // downward travel that makes a swipe
     bool swipe_cancel = true;
+    int settings_edge_px = 0;  // opt-in bottom edge reserved for Settings
+    int settings_swipe_px = 48;  // upward travel required from that edge
   };
 
   explicit TouchGestures(App& app) : app_(app) {}
@@ -38,7 +40,7 @@ class TouchGestures {
   void tick(uint32_t now_ms);
 
  private:
-  enum class State : uint8_t { Idle, Pending, Settings, Talk, Swipe, Ignored };
+  enum class State : uint8_t { Idle, Pending, Settings, SettingsSwipe, MenuTap, MenuDrag, Talk, Swipe, Ignored };
   void press(Button b);
   void release(Button b);
 

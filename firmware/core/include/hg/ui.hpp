@@ -87,6 +87,10 @@ class Ui {
   bool title_hit(int x, int y) const {
     return x >= ox_ && x < ox_ + info_.width && y >= oy_ && y < oy_ + layout_.top_h;
   }
+  bool bottom_edge_hit(int x, int y, int edge_height) const {
+    return edge_height > 0 && x >= ox_ && x < ox_ + info_.width &&
+           y >= oy_ && y < oy_ + info_.height && y >= oy_ + info_.height - edge_height;
+  }
 
  private:
   void draw_top(Canvas& c, const UiModel& m);

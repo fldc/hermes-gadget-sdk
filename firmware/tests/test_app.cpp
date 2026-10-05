@@ -1065,6 +1065,204 @@ TEST("settings: title hold and menu swipe work without starting a recording") {
   CHECK(r.app.screen() == hg::Screen::Ready);
 }
 
+TEST("settings: slow short drags never select a setting") {
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  CHECK(r.app.open_settings());
+  hg::TouchGestures touch(r.app);
+  const auto volume = r.app.console("get volume");
+  touch.update(true, 100, 80, r.fake.clock);
+  r.advance(250);
+  touch.tick(r.fake.clock);
+  touch.update(true, 100, 120, r.fake.clock);
+  touch.update(false, 0, 0, r.fake.clock + 20);
+  CHECK_EQ(r.app.console("get volume"), volume);
+  CHECK_EQ(r.app.model().detail, std::string("Speaker volume"));
+  CHECK(!r.fake.mic_on);
+}
+
+TEST("settings: a drag returning to its start is not a tap") {
+  Rig r(Rig::touch_profile());
+  r.bring_online(true);
+  CHECK(r.app.open_settings());
+  hg::TouchGestures touch(r.app);
+  const auto volume = r.app.console("get volume");
+  touch.update(true, 100, 80, r.fake.clock);
+  touch.update(true, 100, 110, r.fake.clock + 20);
+  touch.update(true, 100, 80, r.fake.clock + 40);
+  touch.update(false, 0, 0, r.fake.clock + 60);
+  CHECK_EQ(r.app.console("get volume"), volume);
+}
+
+TEST("settings: slow swipes navigate and a still tap selects once") {
+  Rig r(Rig::touch_profile());
+  r.fake.backlight = true;
+  r.bring_online(true);
+  CHECK(r.app.open_settings());
+  hg::TouchGestures touch(r.app);
+  const auto volume = r.app.console("get volume");
+  touch.update(true, 100, 80, r.fake.clock);
+  r.advance(250);
+  touch.tick(r.fake.clock);
+  touch.update(true, 100, 110, r.fake.clock);
+  touch.update(true, 100, 150, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK_EQ(r.app.console("get volume"), volume);
+  CHECK_EQ(r.app.model().detail, std::string("Screen brightness"));
+  const auto brightness = r.app.console("get brightness");
+  touch.update(true, 100, 80, r.fake.clock);
+  r.advance(300);
+  touch.tick(r.fake.clock);
+  CHECK_EQ(r.app.console("get brightness"), brightness);
+  touch.update(false, 0, 0, r.fake.clock);
+  CHECK(r.app.console("get brightness") != brightness);
+  const auto selected = r.app.console("get brightness");
+  touch.update(false, 0, 0, r.fake.clock + 20);
+  CHECK_EQ(r.app.console("get brightness"), selected);
+  CHECK(!r.fake.mic_on);
+}
+
+TEST("settings: bottom-edge upward swipe toggles once without recording") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 40;
+  hg::TouchGestures touch(r.app, cfg);
+  touch.update(true, 120, 225, r.fake.clock);
+  r.advance(350);
+  touch.tick(r.fake.clock);
+  CHECK(!r.fake.mic_on);
+  touch.update(true, 120, 170, r.fake.clock);
+  CHECK(r.app.settings_open());
+  touch.update(true, 120, 100, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK(r.app.settings_open());
+  CHECK_EQ(r.app.model().detail, std::string("Speaker volume"));
+  CHECK(!r.fake.mic_on);
+  CHECK(r.fake.last("audio.start") == nullptr);
+  touch.update(true, 120, 225, r.fake.clock);
+  touch.update(true, 120, 170, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK(!r.app.settings_open());
+}
+
+TEST("settings: short and sideways bottom-edge drags do not select") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  CHECK(r.app.open_settings());
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 40;
+  hg::TouchGestures touch(r.app, cfg);
+  const auto volume = r.app.console("get volume");
+  touch.update(true, 120, 225, r.fake.clock);
+  r.advance(1200);
+  touch.tick(r.fake.clock);
+  touch.update(true, 120, 205, r.fake.clock);
+  touch.update(false, 0, 0, r.fake.clock + 20);
+  CHECK(r.app.settings_open());
+  CHECK_EQ(r.app.console("get volume"), volume);
+  touch.update(true, 120, 225, r.fake.clock);
+  touch.update(true, 160, 215, r.fake.clock + 20);
+  touch.update(true, 160, 160, r.fake.clock + 40);
+  touch.update(false, 0, 0, r.fake.clock + 60);
+  CHECK(r.app.settings_open());
+  CHECK_EQ(r.app.console("get volume"), volume);
+}
+
+TEST("settings: bottom-edge gesture respects prompt and screen-wake guards") {
+  {
+    Rig prompted(Rig::touch_profile());
+    prompted.fake.width = prompted.fake.height = 240;
+    prompted.bring_online(true);
+    prompted.server(R"({"type":"prompt","id":"edge-test","text":"Continue?"})");
+    CHECK(!prompted.app.settings_swipe_start_hit(120, 225, 40));
+  }
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.fake.backlight = true;
+  r.bring_online(true);
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 40;
+  hg::TouchGestures touch(r.app, cfg);
+  CHECK(!r.app.settings_swipe_start_hit(120, 190, 40));
+  r.app.console("set screen_timeout 30");
+  r.advance(30000);
+  CHECK_EQ(r.fake.brightness, 0);
+  touch.update(true, 120, 225, r.fake.clock);
+  touch.update(true, 120, 170, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK(!r.app.settings_open());
+  CHECK(r.fake.brightness > 0);
+  touch.update(true, 120, 225, r.fake.clock);
+  touch.update(true, 120, 170, r.fake.clock + 20);
+  CHECK(r.app.settings_open());
+}
+
+TEST("settings: edge shortcut never steals recording cancellation") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 40;
+  hg::TouchGestures touch(r.app, cfg);
+  r.app.console("talk");
+  CHECK(r.fake.mic_on);
+  CHECK(!r.app.settings_swipe_start_hit(120, 225, 40));
+  touch.update(true, 120, 160, r.fake.clock);
+  touch.update(true, 120, 230, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK(!r.fake.mic_on);
+  CHECK(!r.app.settings_open());
+  CHECK(r.fake.last("audio.cancel") != nullptr);
+  CHECK(r.fake.last("audio.end") == nullptr);
+}
+
+TEST("settings: edge shortcut never steals playback cancellation") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 40;
+  hg::TouchGestures touch(r.app, cfg);
+  r.server(R"({"type":"audio.start","stream":3,"rate":16000,"format":"pcm16"})");
+  CHECK(r.fake.spk_open);
+  CHECK(!r.app.settings_swipe_start_hit(120, 225, 40));
+  touch.update(true, 120, 160, r.fake.clock);
+  touch.update(true, 120, 230, r.fake.clock + 20);
+  touch.update(false, 0, 0, r.fake.clock + 40);
+  CHECK(!r.fake.spk_open);
+  CHECK(!r.app.settings_open());
+  CHECK(!r.fake.mic_on);
+}
+
+TEST("settings: edge shortcut stays disabled while Hermes is thinking") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  r.server(R"({"type":"turn.start","turn":"edge-test"})");
+  CHECK(!r.app.settings_swipe_start_hit(120, 225, 40));
+}
+
+TEST("settings: downward edge swipe navigates rather than toggling Settings") {
+  Rig r(Rig::touch_profile());
+  r.fake.width = r.fake.height = 240;
+  r.bring_online(true);
+  CHECK(r.app.open_settings());
+  hg::TouchGestures::Config cfg;
+  cfg.settings_edge_px = 80;
+  hg::TouchGestures touch(r.app, cfg);
+  const auto volume = r.app.console("get volume");
+  touch.update(true, 120, 165, r.fake.clock);
+  touch.update(true, 120, 200, r.fake.clock + 20);
+  touch.update(true, 120, 230, r.fake.clock + 40);
+  touch.update(false, 0, 0, r.fake.clock + 60);
+  CHECK(r.app.settings_open());
+  CHECK_EQ(r.app.model().detail, std::string("Screen brightness"));
+  CHECK_EQ(r.app.console("get volume"), volume);
+}
+
 TEST("power: idle screen dims, sleeps and consumes the wake input without recording") {
   Rig r;
   r.fake.backlight = true;

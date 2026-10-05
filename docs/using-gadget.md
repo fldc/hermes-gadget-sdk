@@ -39,6 +39,18 @@ Tap CANCEL to move to the next item, then tap TALK to change it. On a touchscree
 | Power off | Select twice to shut down a board with a power driver |
 | Wi-Fi setup | Start [phone-based setup](setup-board.md#set-up-wi-fi-with-your-phone) on ESP32 boards |
 
+On a touchscreen, swipe down to move to the next menu item. A still tap selects the current item when you lift your finger. A drag that is too short to navigate does not select or change the item, even if your finger returns to its starting point.
+
+On the LilyGO T-Watch-S3, swipe upward from the bottom edge to open or close
+Settings. Start within the bottom 40 pixels and move upward at least 48 pixels
+(about one fifth of the screen). That edge is reserved for this gesture: a short
+drag or a hold there does not record speech or change a menu item. Hold elsewhere
+to talk. If the screen is dark, first touch to wake it, then swipe. Pairing
+confirmation prompts, Wi-Fi setup and firmware updates retain their own controls.
+The shortcut only works while idle or already in Settings. Recording, waiting
+for Hermes and playback keep their conversation controls; swiping down still
+cancels and never opens Settings.
+
 Volume, brightness, talk mode, and screen timeout survive restarts. Unavailable drivers show as unavailable. These checks help you test the hardware; a completed tone does not prove that a physical speaker produced sound.
 
 Screen timeout is off by default. When enabled, a brightness-capable display dims halfway through the idle period, then goes dark. The first button press or touch wakes it without recording or answering a prompt. Incoming replies and prompts wake it too. Recording, playback, settings, pairing and updates keep it awake. The processor and Wi-Fi remain running; this is screen sleep. Use the board's Power off control to shut down the device.

@@ -92,6 +92,7 @@ class App {
   void close_settings();
   bool settings_open() const { return menu_ != Menu::Closed; }
   bool settings_title_hit(int x, int y) const;
+  bool settings_swipe_start_hit(int x, int y, int edge_height) const;
   // Returns true when this input only wakes a sleeping display.
   bool wake_display();
   bool start_wifi_setup();

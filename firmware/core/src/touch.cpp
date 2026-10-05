@@ -21,6 +21,7 @@ void TouchGestures::tick(uint32_t now_ms) {
 void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
   if (!touching) {
     switch (state_) {
+      case State::MenuTap:  // choose only after a still menu touch is released
       case State::Pending:  // a quick tap
         press(Button::Talk);
         release(Button::Talk);
@@ -35,7 +36,9 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
 
   if (state_ == State::Idle) {
     if (app_.wake_display()) { state_ = State::Ignored; return; }
-    state_ = app_.settings_title_hit(x, y) ? State::Settings : State::Pending;
+    state_ = app_.settings_swipe_start_hit(x, y, cfg_.settings_edge_px) ? State::SettingsSwipe
+             : app_.settings_title_hit(x, y) ? State::Settings
+             : app_.settings_open() ? State::MenuTap : State::Pending;
     x0_ = x;
     y0_ = y;
     t0_ = now_ms;
@@ -46,6 +49,28 @@ void TouchGestures::update(bool touching, int x, int y, uint32_t now_ms) {
   const bool swiped_down = (cfg_.swipe_cancel || app_.settings_open() || app_.wifi_setup_open()) &&
                           dy >= cfg_.swipe_px && std::abs(dx) < dy;
   switch (state_) {
+    case State::SettingsSwipe:
+      if (swiped_down) {
+        state_ = State::Swipe;
+        press(Button::Cancel);
+      } else if (dy <= -cfg_.settings_swipe_px && std::abs(dx) < -dy) {
+        state_ = State::Ignored;  // one toggle per swipe, no TALK on release
+        app_.open_settings();
+      } else if (std::abs(dx) > cfg_.slop_px) {
+        state_ = State::Ignored;
+      }
+      break;
+    case State::MenuTap:
+    case State::MenuDrag:
+      if (swiped_down) {
+        state_ = State::Swipe;
+        press(Button::Cancel);
+      } else if (std::abs(dx) > cfg_.slop_px || std::abs(dy) > cfg_.slop_px) {
+        // Never select after a drag, even if it is too short to navigate or
+        // returns to its origin. Unlike TALK, menu touches have no hold timer.
+        state_ = State::MenuDrag;
+      }
+      break;
     case State::Settings:
       if (swiped_down) {
         state_ = State::Swipe;

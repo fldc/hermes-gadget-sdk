@@ -245,7 +245,13 @@ extern "C" void app_main(void) {
   if (hal.speaker == &g_codec_speaker) profile.speaker_rate = hgp::CodecAudio::kRate;
 
   static hg::App app(hal, profile);
-  static hg::TouchGestures gestures(app);
+  hg::TouchGestures::Config gesture_config;
+#if CONFIG_HG_BOARD_TWATCH_S3
+  // Reserve the bottom 40 pixels for an upward Settings swipe. Waiting for
+  // this gesture must not start a voice recording or select a menu item.
+  gesture_config.settings_edge_px = 40;
+#endif
+  static hg::TouchGestures gestures(app, gesture_config);
   if (profile.touch_screen) g_gestures = &gestures;
   apply_touch_cancel();
   add_status_led(app, board.status_led);
