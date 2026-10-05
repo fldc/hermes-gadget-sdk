@@ -134,7 +134,11 @@ void PdmMic::task(void* arg) {
       continue;
     }
     size_t got = 0;
-    if (i2s_channel_read(self->rx_, pcm, sizeof(pcm), &got, pdMS_TO_TICKS(100)) != ESP_OK || got == 0) continue;
+    // ESP_ERR_TIMEOUT is normal here: it means fewer bytes than requested were
+    // ready, and `got` still holds the samples that were read. Only a `got` of
+    // zero means nothing arrived.
+    i2s_channel_read(self->rx_, pcm, sizeof(pcm), &got, pdMS_TO_TICKS(100));
+    if (got == 0) continue;
     if (self->capturing_) events::post(EventType::Mic, pcm, got);
   }
 }
