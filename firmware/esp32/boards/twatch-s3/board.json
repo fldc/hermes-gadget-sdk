@@ -1,0 +1,6 @@
+{
+  "title": "LilyGO T-Watch-S3",
+  "summary": "240×240 touchscreen, PDM microphone, speaker and battery management. Experimental.",
+  "docs": "docs/hardware.md#lilygo-t-watch-s3",
+  "ready_made": true
+}

@@ -38,4 +38,14 @@ bool Axp2101::enable_aldo1_3v3() {
          write_(0x90, static_cast<uint8_t>(enabled | 0x01));
 }
 
+bool Axp2101::enable_display_supplies() {
+  uint8_t aldo2, aldo3, enabled;
+  if (!read_(0x93, &aldo2, 1) || !read_(0x94, &aldo3, 1) || !read_(0x90, &enabled, 1)) return false;
+  // ALDO2 = display backlight, ALDO3 = display and touch. 500 mV + 100 mV per
+  // step, so 28 selects 3.3 V. Preserve the other rail controls.
+  return write_(0x93, static_cast<uint8_t>((aldo2 & 0xe0) | 28)) &&
+         write_(0x94, static_cast<uint8_t>((aldo3 & 0xe0) | 28)) &&
+         write_(0x90, static_cast<uint8_t>(enabled | 0x06));
+}
+
 }  // namespace hg

@@ -53,6 +53,9 @@ BOARDS = {
     # A 1.9" 320x170 board with no audio hardware (e.g. LilyGO T-Display-S3).
     "sim-320x170-nospeaker": Board("sim-320x170-nospeaker", 320, 170, mic=False, speaker=False,
                                    scroll_buttons=False),
+    # A 1.54" 240x240 SPI LCD with PDM mic, speaker and touch, no scroll buttons
+    # (e.g. LilyGO T-Watch-S3).
+    "sim-twatch-s3": Board("sim-twatch-s3", 240, 240, scroll_buttons=False, touch=True),
 }
 
 

@@ -206,6 +206,40 @@ Free GPIOs after the panel, buttons and battery: 1, 2, 3, 10, 11, 12, 13. An I2S
 
 Pins and the panel setup follow LilyGO's [T-Display-S3 examples](https://github.com/Xinyuan-LilyGO/T-Display-S3) (`examples/factory`) and the [pin map](https://lilygo.cc). No physical verification report is recorded yet; see the [hardware validation table](hardware-validation.md).
 
+## LilyGO T-Watch-S3
+
+Board option `twatch-s3`, for LilyGO's smartwatch: an ESP32-S3R8 (8 MB octal PSRAM) with 16 MB flash, a 1.54" 240×240 ST7789V3 panel, an FT6336U capacitive touchscreen, a MAX98357A I2S amplifier, an SPM1423 PDM microphone and an AXP2101 PMIC. Hold the screen to talk, swipe down to cancel; BOOT also works as TALK. An AXP2101 supplies the backlight (ALDO2) and the display and touch controller (ALDO3), which the port enables before those peripherals start. This is an experimental port.
+
+| Part | Chip | Connection |
+|---|---|---|
+| Display | ST7789V3, SPI | MOSI 13, SCLK 18, CS 12, DC 38, RST —(tied), BL 45; 240×240 |
+| Touch | FT6336U, I2C (Wire1) | SDA 39, SCL 40, INT 16, addr 0x38; shares the display's ALDO3 rail |
+| Microphone | SPM1423, PDM | CLK 44, DIN 47 |
+| Speaker | MAX98357A, I2S | BCLK 48, WS 15, DIN 46 |
+| PMIC | AXP2101, I2C | SDA 10, SCL 11; ALDO2 backlight, ALDO3 display and touch, both 3.3 V |
+| Buttons (to GND) | | TALK = touch or BOOT (0) |
+
+**Build and flash** it with PlatformIO:
+
+```bash
+cd firmware/esp32
+pio run -e twatch-s3 -t upload -t monitor
+```
+
+Or with `idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;boards/twatch-s3/sdkconfig.defaults" build`. The Micro-USB port is the S3's own USB Serial/JTAG, so flashing and the serial console (115200 baud) both use it. If the port keeps reconnecting, enter download mode: hold **BOOT**, press the crown for a second, release BOOT, then flash.
+
+### First flash: what to check
+
+This port is written from LilyGO's published pinout and hardware reference. On the first flash, go through this list, and for anything that looks wrong send the report from `hermes-gadget diag --port <port>`:
+
+1. **Boot log:** `st7789 240x240 ready` and the parts line `display st7789, mic pdm, speaker i2s`. The AXP2101 must be detected before the display; a missing ALDO3 leaves the panel and touch dead.
+2. **Screen:** the mascot is centred and upright, not mirrored or colour-inverted. Adjust `mirror_x`/`mirror_y`/`swap_xy`/`invert` in `board.cpp` if not.
+3. **Backlight:** ALDO2 powers the backlight circuit and GPIO 45 sets the level; check that brightness changes work and that a zero level darkens the screen.
+4. **Touch:** hold the screen and the listening waves appear; a swipe *down* cancels. A reversed axis means the touch mirroring needs flipping.
+5. **Audio:** speak after holding the screen; the PDM microphone should register. Replies play through the MAX98357A. Voice needs speech recognition and text-to-speech configured in Hermes.
+
+Pins follow LilyGO's [hardware reference](https://github.com/Xinyuan-LilyGO/LilyGoLib/blob/master/docs/hardware/lilygo-t-watch-s3.md) and Arduino variant. No physical verification report is recorded yet; see the [hardware validation table](hardware-validation.md).
+
 ## ESP32-S3-Touch-AMOLED-1.75
 
 Board option `esp32s3-touch-amoled-175`, for Waveshare's all-in-one board: an ESP32-S3R8 (8 MB octal PSRAM) with 16 MB flash, a 1.75" 466×466 AMOLED, touch, two microphones, a speaker output, a battery charger and an optional case. Nothing needs wiring; plug a small 8 Ω speaker into the **SPK** connector to hear replies.

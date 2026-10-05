@@ -149,6 +149,21 @@ class I2sMic final : public hg::AudioIn {
   std::atomic<bool> capturing_{false};
 };
 
+// PDM microphone (SPM1423-style): the I2S peripheral runs in PDM RX mode and
+// the reader task posts 20 ms PCM16 chunks while capturing.
+class PdmMic final : public hg::AudioIn {
+ public:
+  bool begin(const PdmMicConfig& cfg);
+  bool start(uint32_t sample_rate) override;
+  void stop() override;
+
+ private:
+  static void task(void* arg);
+  i2s_chan_handle_t rx_ = nullptr;
+  uint32_t rate_ = 16000;
+  std::atomic<bool> capturing_{false};
+};
+
 // I2S amplifier fed from a stream buffer by a writer task.
 class I2sSpeaker final : public hg::AudioOut {
  public:
@@ -290,6 +305,7 @@ class AxpPower final : public hg::Power {
  public:
   bool begin(i2c_master_bus_handle_t bus);
   bool enable_audio_supply() { return chip_ && chip_->enable_aldo1_3v3(); }
+  bool enable_display_supplies() { return chip_ && chip_->enable_display_supplies(); }
   std::optional<hg::PowerStatus> read() override { return chip_->read(); }
   bool power_off() override { return chip_->power_off(); }
 

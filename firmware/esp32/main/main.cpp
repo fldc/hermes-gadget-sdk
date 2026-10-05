@@ -23,6 +23,7 @@ hgp::SpiDisplay g_display;
 hgp::ParallelDisplay g_parallel;
 hgp::AmoledDisplay g_amoled;
 hgp::I2sMic g_mic;
+hgp::PdmMic g_pdm_mic;
 hgp::I2sSpeaker g_speaker;
 hgp::CodecAudio g_codec;
 hgp::CodecMic g_codec_mic;
@@ -172,7 +173,19 @@ extern "C" void app_main(void) {
   if (latch_power) hal.power = &g_latch_power;
   if (g_updater.capacity()) hal.updater = &g_updater;
   i2c_master_bus_handle_t i2c_bus = hgp::i2c::bus(board.i2c);
-  const bool peripherals_ready = !board.cores3 || g_cores3.begin(i2c_bus);
+  i2c_master_bus_handle_t touch_bus = i2c_bus;
+  if (board.touch_i2c.sda >= 0 && board.touch_i2c.scl >= 0) {
+    if (i2c_master_bus_handle_t b = hgp::i2c::bus(board.touch_i2c)) touch_bus = b;
+  }
+  const bool cores3_ready = !board.cores3 || g_cores3.begin(i2c_bus);
+  // The AXP2101 display/touch/backlight rails must be up before those
+  // peripherals are initialised, so bring power up first.
+  bool power_ready = true;
+  if (board.axp2101 && g_power.begin(i2c_bus)) {
+    hal.power = &g_power;
+    if (board.axp_display_supply) power_ready = g_power.enable_display_supplies();
+  }
+  const bool peripherals_ready = cores3_ready && power_ready;
   if (board.cores3 && peripherals_ready)
     g_display.board_backlight = [](uint8_t percent) { g_cores3.set_backlight(percent); };
   if (peripherals_ready && board.lcd.enabled) {
@@ -185,8 +198,8 @@ extern "C" void app_main(void) {
     hal.display = &g_amoled;
   }
   if (board.mic.enabled && g_mic.begin(board.mic)) hal.mic = &g_mic;
+  if (board.pdm_mic.enabled && g_pdm_mic.begin(board.pdm_mic)) hal.mic = &g_pdm_mic;
   if (board.speaker.enabled && g_speaker.begin(board.speaker)) hal.speaker = &g_speaker;
-  if (board.axp2101 && g_power.begin(i2c_bus)) hal.power = &g_power;
   const bool audio_power = peripherals_ready && (!board.axp_audio_supply || g_power.enable_audio_supply());
   if (!audio_power) ESP_LOGE(TAG, "audio supply unavailable");
   if (board.codec.enabled && audio_power && g_codec.begin(board.codec, i2c_bus)) {
@@ -195,14 +208,14 @@ extern "C" void app_main(void) {
   }
   g_buttons.begin(board.buttons);
   const bool touch = peripherals_ready && (board.touch.enabled || board.pwr_key.enabled) &&
-                     g_touch.begin(board.touch, board.pwr_key, i2c_bus);
+                     g_touch.begin(board.touch, board.pwr_key, touch_bus);
 
   hgp::diag::Parts parts;
   parts.display = hal.display == &g_display ? g_display.controller_name()
                       : hal.display == &g_parallel ? "st7789-i80"
                       : hal.display == &g_amoled ? "co5300"
                                                 : "none";
-  parts.mic = hal.mic == &g_codec_mic ? "es7210" : hal.mic == &g_mic ? "i2s" : "none";
+  parts.mic = hal.mic == &g_codec_mic ? "es7210" : hal.mic == &g_mic ? "i2s" : hal.mic == &g_pdm_mic ? "pdm" : "none";
   parts.speaker = hal.speaker == &g_codec_speaker ?
       (board.codec.speaker == hgp::SpeakerCodec::Aw88298 ? "aw88298" : "es8311") :
       hal.speaker == &g_speaker ? "i2s" : "none";

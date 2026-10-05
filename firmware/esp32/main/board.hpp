@@ -37,9 +37,18 @@ struct I2sMicConfig {
   int sck = -1, ws = -1, sd = -1;
 };
 
+// PDM microphone (e.g. Knowles SPM1423): a clock and a data line only.
+struct PdmMicConfig {
+  bool enabled = false;
+  int clk = -1, din = -1;
+};
+
 struct I2sSpeakerConfig {
   bool enabled = false;
   int bclk = -1, ws = -1, dout = -1;
+  // I2S controller index (0 or 1). Boards with a PDM microphone must use 1:
+  // on the ESP32-S3, PDM RX is only available on I2S0.
+  int port = 0;
 };
 
 // QSPI AMOLED with a CO5300 controller (round 466x466 panels).
@@ -111,14 +120,21 @@ struct BoardConfig {
   const char* name;
   LcdConfig lcd;
   I2sMicConfig mic;
+  PdmMicConfig pdm_mic;
   I2sSpeakerConfig speaker;
   ButtonConfig buttons;
   AmoledConfig amoled;
   I2cBusConfig i2c;
+  // A second I2C bus for a touch controller wired away from the shared bus
+  // (leave sda/scl at -1 to use the main bus).
+  I2cBusConfig touch_i2c{};
   CodecAudioConfig codec;
   TouchConfig touch;
   ExpanderKeyConfig pwr_key;
   bool axp2101 = false;
+  // Bring up the AXP2101 display/touch/backlight rails (ALDO2/ALDO3) before
+  // the panel and touch controller are initialised.
+  bool axp_display_supply = false;
   bool axp_audio_supply = false;
   bool cores3 = false;
   LatchPowerConfig latch_power;

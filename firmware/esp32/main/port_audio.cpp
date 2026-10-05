@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "driver/i2s_std.h"
+#include "driver/i2s_pdm.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -88,10 +89,61 @@ void I2sMic::task(void* arg) {
 }
 
 // --------------------------------------------------------------------------
+// PDM microphone
+
+bool PdmMic::begin(const PdmMicConfig& cfg) {
+  // On the ESP32-S3, PDM RX is only available on I2S0.
+  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+  if (i2s_new_channel(&chan, nullptr, &rx_) != ESP_OK) return false;
+  i2s_pdm_rx_config_t pdm = {};
+  pdm.clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(rate_);
+  pdm.slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+  pdm.slot_cfg.slot_mask = I2S_PDM_SLOT_LEFT;  // the microphone drives the left slot
+  pdm.gpio_cfg.clk = static_cast<gpio_num_t>(cfg.clk);
+  pdm.gpio_cfg.din = static_cast<gpio_num_t>(cfg.din);
+  if (i2s_channel_init_pdm_rx_mode(rx_, &pdm) != ESP_OK) return false;
+  xTaskCreate(&PdmMic::task, "hg-mic", 4096, this, 6, nullptr);
+  ESP_LOGI(TAG, "PDM microphone ready");
+  return true;
+}
+
+bool PdmMic::start(uint32_t sample_rate) {
+  if (!rx_) return false;
+  if (sample_rate != rate_) {
+    i2s_pdm_rx_clk_config_t clk = I2S_PDM_RX_CLK_DEFAULT_CONFIG(sample_rate);
+    if (i2s_channel_reconfig_pdm_rx_clock(rx_, &clk) != ESP_OK) return false;
+    rate_ = sample_rate;
+  }
+  if (i2s_channel_enable(rx_) != ESP_OK) return false;
+  capturing_ = true;
+  return true;
+}
+
+void PdmMic::stop() {
+  if (!capturing_) return;
+  capturing_ = false;
+  i2s_channel_disable(rx_);
+}
+
+void PdmMic::task(void* arg) {
+  auto* self = static_cast<PdmMic*>(arg);
+  int16_t pcm[kMicChunk];
+  for (;;) {
+    if (!self->capturing_) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+    size_t got = 0;
+    if (i2s_channel_read(self->rx_, pcm, sizeof(pcm), &got, pdMS_TO_TICKS(100)) != ESP_OK || got == 0) continue;
+    if (self->capturing_) events::post(EventType::Mic, pcm, got);
+  }
+}
+
+// --------------------------------------------------------------------------
 // Speaker
 
 bool I2sSpeaker::begin(const I2sSpeakerConfig& cfg) {
-  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(cfg.port, I2S_ROLE_MASTER);
   chan.auto_clear = true;  // silence on underrun instead of repeating the last buffer
   if (i2s_new_channel(&chan, &tx_, nullptr) != ESP_OK) return false;
   i2s_std_config_t std_cfg = std_config(rate_, I2S_DATA_BIT_WIDTH_16BIT, cfg.bclk, cfg.ws, cfg.dout, -1);

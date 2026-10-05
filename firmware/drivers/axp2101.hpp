@@ -17,6 +17,7 @@ class Axp2101 final : public Power {
   std::optional<PowerStatus> read() override;
   bool power_off() override;
   bool enable_aldo1_3v3();  // Only for boards whose audio circuit requires this rail.
+  bool enable_display_supplies();  // ALDO2 (backlight) + ALDO3 (display/touch) at 3.3 V.
 
  private:
   Read read_;

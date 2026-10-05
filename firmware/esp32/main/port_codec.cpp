@@ -26,19 +26,35 @@ constexpr uint8_t kMic1And2 = 0x03;           // ES7210 inputs MIC1 | MIC2 (ES71
 
 namespace i2c {
 i2c_master_bus_handle_t bus(const I2cBusConfig& cfg) {
-  static i2c_master_bus_handle_t handle = nullptr;
-  if (handle || cfg.sda < 0 || cfg.scl < 0) return handle;
+  // Boards may wire a peripheral (e.g. the touch controller) to its own bus.
+  // Cache by pin pair and assign I2C ports in order of first use.
+  struct Entry {
+    int sda, scl;
+    i2c_master_bus_handle_t handle;
+  };
+  static Entry entries[2] = {{-1, -1, nullptr}, {-1, -1, nullptr}};
+  static int count = 0;
+  if (cfg.sda < 0 || cfg.scl < 0) return nullptr;
+  for (int i = 0; i < count; ++i) {
+    if (entries[i].sda == cfg.sda && entries[i].scl == cfg.scl) return entries[i].handle;
+  }
+  if (count >= 2) {
+    ESP_LOGE(TAG, "no free I2C controller for SDA %d / SCL %d", cfg.sda, cfg.scl);
+    return nullptr;
+  }
   i2c_master_bus_config_t bus_cfg = {};
-  bus_cfg.i2c_port = I2C_NUM_0;
+  bus_cfg.i2c_port = static_cast<i2c_port_t>(count);
   bus_cfg.sda_io_num = static_cast<gpio_num_t>(cfg.sda);
   bus_cfg.scl_io_num = static_cast<gpio_num_t>(cfg.scl);
   bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
   bus_cfg.glitch_ignore_cnt = 7;
   bus_cfg.flags.enable_internal_pullup = true;
+  i2c_master_bus_handle_t handle = nullptr;
   if (i2c_new_master_bus(&bus_cfg, &handle) != ESP_OK) {
     ESP_LOGE(TAG, "I2C bus on SDA %d / SCL %d failed", cfg.sda, cfg.scl);
-    handle = nullptr;
+    return nullptr;
   }
+  entries[count++] = {cfg.sda, cfg.scl, handle};
   return handle;
 }
 }  // namespace i2c

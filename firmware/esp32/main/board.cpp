@@ -20,6 +20,8 @@ namespace {
 #define HG_BOARD_NAME "m5stack-cores3"
 #elif CONFIG_HG_BOARD_T_DISPLAY_S3
 #define HG_BOARD_NAME "tdisplay-s3"
+#elif CONFIG_HG_BOARD_TWATCH_S3
+#define HG_BOARD_NAME "lilygo-t-watch-s3"
 #elif CONFIG_HG_BOARD_WS_ESP32S3_LCD_154
 #define HG_BOARD_NAME "waveshare-esp32s3-lcd-154"
 #else
@@ -233,8 +235,48 @@ BoardConfig make() {
   b.lcd.bus.pclk_mhz = 16;
   b.latch_power = {true, 4, 15, -1, 38, 2, 4300, false};
   b.buttons = {0, 14, -1, -1};
-  b.talk_label = "BOOT";
-  b.cancel_label = "B2";
+    b.talk_label = "BOOT";
+    b.cancel_label = "B2";
+    return b;
+}
+#elif CONFIG_HG_BOARD_TWATCH_S3
+// LilyGO T-Watch-S3: 1.54" 240x240 ST7789V3 over SPI, FT6336U touch on its own
+// I2C bus (Wire1), MAX98357A I2S amplifier and an SPM1423 PDM microphone,
+// all behind an AXP2101 PMIC. ALDO2 powers the backlight, ALDO3 the display
+// and touch controller. Pins: docs/hardware.md#lilygo-t-watch-s3 (LilyGO's
+// hardware reference and Arduino variant).
+BoardConfig make() {
+  BoardConfig b{};
+  b.name = kBoardName;
+  b.axp2101 = true;
+  b.axp_display_supply = true;
+  b.i2c = {10, 11, 400000};
+  b.touch_i2c = {39, 40, 400000};
+  b.lcd.enabled = true;
+  b.lcd.width = 240;
+  b.lcd.height = 240;
+  b.lcd.swap_xy = false;
+  b.lcd.mirror_x = true;
+  b.lcd.mirror_y = true;
+  b.lcd.invert = true;
+  b.lcd.gap_x = 0;
+  b.lcd.gap_y = 80;  // the 240x240 window sits at row 80 of the 240x320 ST7789 RAM
+  b.lcd.mosi = 13;
+  b.lcd.sclk = 18;
+  b.lcd.cs = 12;
+  b.lcd.dc = 38;
+  b.lcd.rst = -1;  // not connected
+  b.lcd.backlight = 45;
+  b.pdm_mic = {true, 44, 47};
+  b.speaker = {true, 48, 15, 46, 1};  // PDM RX owns I2S0 on the ESP32-S3, so the amp uses I2S1
+  b.touch.enabled = true;
+  b.touch.controller = TouchController::Ft5x06;
+  b.touch.addr = 0x38;
+  b.touch.width = 240;
+  b.touch.height = 240;
+  b.buttons = {0, -1, -1, -1};  // BOOT as an alternative to holding the screen
+  b.talk_label = "Hold screen";
+  b.cancel_label = "Swipe down";
   return b;
 }
 #elif CONFIG_HG_BOARD_CUSTOM

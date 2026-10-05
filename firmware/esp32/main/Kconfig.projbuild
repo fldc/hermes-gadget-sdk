@@ -41,6 +41,8 @@ menu "Hermes Gadget"
             bool "Waveshare ESP32-S3-LCD-1.54 (ST7789 240x240, ES8311 + ES7210 codecs)"
         config HG_BOARD_T_DISPLAY_S3
             bool "LilyGO T-Display-S3 (ST7789 320x170 on an i80 parallel bus, no audio)"
+        config HG_BOARD_TWATCH_S3
+            bool "LilyGO T-Watch-S3 (ST7789 240x240, FT6336U touch, PDM mic, MAX98357A, AXP2101)"
         config HG_BOARD_CUSTOM
             bool "Custom pins (configure below)"
     endchoice
